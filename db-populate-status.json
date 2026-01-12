@@ -1,0 +1,16 @@
+{
+  "serviceStarted": "2026-01-12T15:03:25.964Z",
+  "status": "stopped",
+  "config": {
+    "intervalMinutes": 5,
+    "lookbackHours": 1
+  },
+  "lastUpdated": "2026-01-12T15:04:36.598Z",
+  "lastRun": "2026-01-12T15:03:34.389Z",
+  "duration": "8.42s",
+  "recordsAdded": 446,
+  "followUpNotesUpdated": 0,
+  "dispositionUpdates": 16,
+  "nextRun": "2026-01-12T15:08:34.392Z",
+  "reason": "SIGINT received"
+}
