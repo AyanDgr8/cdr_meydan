@@ -1,3 +1,5 @@
+// public/final-report.js
+
 // Dubai timezone for consistent date handling
 const TIMEZONE = 'Asia/Dubai';
 
@@ -187,6 +189,7 @@ function getFormValues() {
   const formData = {
     start: startDate,
     end: endDate,
+    call_id: document.getElementById('call_id').value,
     // caller_id_number: document.getElementById('caller_id_number').value,
     // callee_id_number: document.getElementById('callee_id_number').value,
     contact_number: document.getElementById('contact_number').value,
@@ -258,7 +261,6 @@ function createTableHeaders() {
     'Wait Duration (hh:mm:ss)',
     'Talk Duration (hh:mm:ss)',
     'Hold Duration (hh:mm:ss)',
-    'Hold Duration Intervals',
     'Agent Disposition',
     'Sub Disp 1',
     'Sub Disp 2',
@@ -270,13 +272,15 @@ function createTableHeaders() {
     'Abandoned',
     'Country',
     'Transfer',
-    'Transfer To Extension',
+    'Transfer To Agent Extension',
+    'Transfer To Queue Extension',
     'Transfer Type',
     'Agent History',
     'Queue History',
     'Recording',
     'All Recordings',
     'Call ID',
+    'CSAT',
     'System Disposition',
   ];
   
@@ -348,27 +352,6 @@ function createTableRows(data) {
       wait_duration: row.wait_duration,
       talk_duration: row.talk_duration,
       hold_duration: row.hold_duration,
-      hold_duration_intervals: row.hold_duration_intervals,
-    });
-    
-    // Debug: Log all available keys in the row object
-    console.log('All row keys:', Object.keys(row));
-    
-    // Debug: Check if hold_duration_intervals exists with different casing
-    console.log('Hold duration intervals check:', {
-      'hold_duration_intervals': row.hold_duration_intervals,
-      'Hold Duration Intervals': row['Hold Duration Intervals'],
-      'holdDurationIntervals': row.holdDurationIntervals,
-      'hold_duration_intervals_exists': 'hold_duration_intervals' in row
-    });
-    
-    // Debug: Check for any field that might contain hold intervals
-    const possibleHoldFields = Object.keys(row).filter(key => 
-      key.toLowerCase().includes('hold') && key.toLowerCase().includes('interval')
-    );
-    console.log('Possible hold interval fields:', possibleHoldFields);
-    possibleHoldFields.forEach(field => {
-      console.log(`${field}:`, row[field]);
     });
     
     // Create row cells array
@@ -407,18 +390,6 @@ function createTableRows(data) {
       row.hold_duration ? 
         (typeof row.hold_duration === 'string' && row.hold_duration.includes(':') ? 
           row.hold_duration : formatDuration(row.hold_duration)) : '00:00:00',
-      
-      // Handle hold_duration_intervals - display as formatted text with line breaks
-      // Check multiple possible field names for hold duration intervals
-      (() => {
-        const holdIntervals = row.hold_duration_intervals || 
-                            row['Hold Duration Intervals'] || 
-                            row.holdDurationIntervals || 
-                            row['hold_duration_intervals'] ||
-                            '';
-        return holdIntervals ? holdIntervals.replace(/\n/g, '<br>') : '';
-      })(),
-      
       row.agent_disposition || '',
       row.sub_disp_1 || '',
       row.sub_disp_2 || '',
@@ -429,15 +400,17 @@ function createTableRows(data) {
       row.campaign_type || '',
       row.abandoned || '',
       row.country || '',
-      row.transfer_event ? 'Yes' : 'No',
-      row.transfer_extension || '',
-      row.transfer_type || '',
-      processHistoryData(row.agent_history, 'agent'),
-      processHistoryData(row.queue_history, 'queue'),
+      row.transfer_event === 1 || row.transfer_event === true ? 'Yes' : 'No',  // Transfer column
+      row.transfer_extension || '',  // Transfer to agent extension column
+      row.transfer_queue_extension || '',  // Transfer to queue extension column
+      row.transfer_type || '',  // Transfer type column
+      agentHistoryContent,
+      queueHistoryContent,
       row.recording ? createRecordingLink(row.recording) : '',
       (row.call_id && row.called_time) ? createAllRecordingsButton(row.call_id, row.called_time) : '',
       row.call_id || '',
-      row.system_disposition || row.disposition || '',
+      row.CSAT || row.csat || '',
+      row.system_disposition || row.disposition || ''
     ];
     
     // Add S.No. column first
@@ -463,7 +436,6 @@ function createTableRows(data) {
   
   return tbody;
 }
-
 
 
 // Create recording link/button - plays single recording directly (no API call)
@@ -810,7 +782,6 @@ function playRecording(url, fileName) {
     return `${m}:${s}`;
   }
 }
-
 
 // Fetch data from API
 async function fetchData(params) {
@@ -1162,6 +1133,7 @@ function prefetchRecordings(rows) {
   setTimeout(fetchNext, 2000);
 }
 
+
 // Helper function to append rows to the table body
 function appendTableRows(tbody, rows, startIndex = 0) {
   // Create a document fragment to batch DOM operations
@@ -1194,7 +1166,6 @@ function appendTableRows(tbody, rows, startIndex = 0) {
       { value: (row.wait_duration_formatted && row.wait_duration_formatted !== 'undefined') ? row.wait_duration_formatted : (row.wait_duration === null ? '' : row.wait_duration), isHTML: false },
       { value: (row.talk_duration_formatted && row.talk_duration_formatted !== 'undefined') ? row.talk_duration_formatted : (row.talk_duration === null ? '' : row.talk_duration), isHTML: false },
       { value: (row.hold_duration_formatted && row.hold_duration_formatted !== 'undefined') ? row.hold_duration_formatted : (row.hold_duration === null ? '' : row.hold_duration), isHTML: false },
-      { value: row.hold_duration_intervals ? row.hold_duration_intervals.replace(/\n/g, '<br>') : '', isHTML: true },
       { value: row.agent_disposition || '', isHTML: false },
       { value: row.sub_disp_1 || '', isHTML: false },
       { value: row.sub_disp_2 || '', isHTML: false },
@@ -1206,14 +1177,16 @@ function appendTableRows(tbody, rows, startIndex = 0) {
       { value: row.abandoned || '', isHTML: false },
       { value: row.country || '', isHTML: false },
       { value: row.transfer_event === 1 || row.transfer_event === true ? 'Yes' : 'No', isHTML: false },  // Transfer column
-      { value: row.transfer_extension || '', isHTML: false },  // Transfer to column
+      { value: row.transfer_extension || '', isHTML: false },  // Transfer to agent extension column
+      { value: row.transfer_queue_extension || '', isHTML: false },  // Transfer to queue extension column
       { value: row.transfer_type || '', isHTML: false },  // Transfer type column
       { value: processHistoryData(row.agent_history, 'agent'), isHTML: true },  // HTML content with eye button
-      { value: processHistoryData(row.record_type === 'Campaign' ? (row.lead_history || row.queue_history) : row.queue_history, 'queue'), isHTML: true },   // HTML content with eye button - use lead_history for campaigns
+      { value: processHistoryData(row.queue_history, 'queue'), isHTML: true },   // HTML content with eye button
       { value: row.recording ? createRecordingLink(row.recording) : '', isHTML: false, isElement: true },  // Recording button - plays single recording directly
       { value: (row.call_id && row.called_time) ? createAllRecordingsButton(row.call_id, row.called_time) : '', isHTML: false, isElement: true },  // All Recordings button - fetches all via API
       { value: row.call_id || '', isHTML: false },
-      { value: row.system_disposition || row.disposition || '', isHTML: false },  // System Disposition column
+      { value: row.csat || '', isHTML: false },
+      { value: row.system_disposition || row.disposition || '', isHTML: false },
     ];
     
     // Add each cell to the row
@@ -1501,22 +1474,15 @@ function getHistoryTextForCSV(row, type) {
       return queueHistoryToText(row.lead_history_array);
     }
     
-    // Try alternative field names for campaigns
+    // Try alternative field names
     if (type === 'agent' && row.agent_history && Array.isArray(row.agent_history)) {
       console.log('DEBUG: Found agent_history array for campaign');
       return agentHistoryToText(row.agent_history);
     }
     
-    // For campaigns, queue history is stored in lead_history field
     if (type === 'queue' && row.lead_history && Array.isArray(row.lead_history)) {
       console.log('DEBUG: Found lead_history array for campaign');
       return queueHistoryToText(row.lead_history);
-    }
-    
-    // Also check if queue_history exists for campaigns (fallback)
-    if (type === 'queue' && row.queue_history && Array.isArray(row.queue_history)) {
-      console.log('DEBUG: Found queue_history array for campaign');
-      return queueHistoryToText(row.queue_history);
     }
   }
   
@@ -1538,16 +1504,8 @@ function getHistoryTextForCSV(row, type) {
   }
   
   // Second, try to extract from HTML content
-  // For campaigns, queue history might be in lead_history field
-  let htmlField = type === 'agent' ? 'agent_history' : 'queue_history';
-  let htmlContent = row[htmlField];
-  
-  // For campaigns, if queue_history is empty, try lead_history
-  if (type === 'queue' && row.record_type === 'Campaign' && (!htmlContent || htmlContent === '')) {
-    htmlField = 'lead_history';
-    htmlContent = row[htmlField];
-    console.log('DEBUG: Using lead_history for campaign queue history');
-  }
+  const htmlField = type === 'agent' ? 'agent_history' : 'queue_history';
+  const htmlContent = row[htmlField];
   
   console.log(`DEBUG: HTML field ${htmlField} content length:`, htmlContent ? htmlContent.length : 0);
   console.log(`DEBUG: HTML content preview:`, htmlContent ? htmlContent.substring(0, 100) + '...' : 'empty');
@@ -1871,6 +1829,7 @@ function showHistoryModal(button) {
 window.showHistoryModal = showHistoryModal;
 
 
+
 // Function to initialize eye buttons within a container (legacy support)
 function initializeEyeButtons(container) {
   // This is now handled by the onclick attribute directly
@@ -1971,6 +1930,7 @@ function initializeEyeButtons(container) {
   });
 }
 
+
 // Generate CSV from data with optimized memory usage for large datasets
 function generateCSV() {
   if (!state.currentResults || state.currentResults.length === 0) {
@@ -1998,7 +1958,6 @@ function generateCSV() {
     'Wait Duration ',
     'Talk Duration ',
     'Hold Duration ',
-    'Hold Duration Intervals',
     'Agent Disposition',
     'Sub Disp 1',
     'Sub Disp 2',
@@ -2010,13 +1969,15 @@ function generateCSV() {
     'Abandoned',
     'Country',
     'Transfer',
-    'Transfer To Extension',
+    'Transfer To Agent Extension',
+    'Transfer To Queue Extension',
     'Transfer Type',
     'Agent History',
     'Queue History',
     'Recording',
     'Call ID',
-    'System Disposition'
+    'CSAT',
+    'System Disposition',
   ];
   
   // Use Blob for better memory efficiency with large datasets
@@ -2061,7 +2022,6 @@ function generateCSV() {
         `"${(row.wait_duration_formatted && row.wait_duration_formatted !== 'undefined') ? row.wait_duration_formatted : formatDuration(row.wait_duration)}"`,
         `"${(row.talk_duration_formatted && row.talk_duration_formatted !== 'undefined') ? row.talk_duration_formatted : formatDuration(row.talk_duration)}"`,
         `"${(row.hold_duration_formatted && row.hold_duration_formatted !== 'undefined') ? row.hold_duration_formatted : formatDuration(row.hold_duration)}"`,
-        `"${(row.hold_duration_intervals || '').replace(/"/g, '""')}"`,
         `"${(row.agent_disposition || '').replace(/"/g, '""')}"`,
         `"${(row.sub_disp_1 || '').replace(/"/g, '""')}"`,
         `"${(row.sub_disp_2 || '').replace(/"/g, '""')}"`,
@@ -2074,11 +2034,13 @@ function generateCSV() {
         `"${(row.country || '').replace(/"/g, '""')}"`,
         `"${(row.transfer_event === 1 || row.transfer_event === true ? 'Yes' : 'No') || ''}"`,
         `"${(row.transfer_extension || '').replace(/"/g, '""')}"`,
+        `"${(row.transfer_queue_extension || '').replace(/"/g, '""')}"`,
         `"${(row.transfer_type || '').replace(/"/g, '""')}"`,
         `"${getHistoryTextForCSV(row, 'agent').replace(/"/g, '""')}"`,
         `"${getHistoryTextForCSV(row, 'queue').replace(/"/g, '""')}"`,
         `"${(row.recording || '').replace(/"/g, '""')}"`,
         `"${(row.call_id || '').replace(/"/g, '""')}"`,
+        `"${(row.CSAT || row.csat || '').replace(/"/g, '""')}"`,
         `"${(row.system_disposition || row.disposition || '').replace(/"/g, '""')}"`,
       ].join(',');
       
@@ -2189,6 +2151,7 @@ function resetForm() {
   initializeDateInputs();
   
   // Clear all other inputs
+  document.getElementById('call_id').value = '';
   // document.getElementById('caller_id_number').value = '';
   // document.getElementById('callee_id_number').value = '';
   document.getElementById('contact_number').value = '';
@@ -2226,20 +2189,7 @@ function processHistoryData(historyData, type) {
     try {
       const parsed = JSON.parse(historyData);
       if (Array.isArray(parsed)) {
-        // Detect data structure to choose appropriate function
-        if (type === 'agent') {
-          return historyToHtml(parsed);
-        } else {
-          // For queue history, check if it has agent history structure (Campaign calls)
-          // or queue history structure (Inbound/Outbound calls)
-          if (parsed.length > 0 && parsed[0].hasOwnProperty('last_attempt')) {
-            // This is agent history data structure (Campaign calls)
-            return historyToHtml(parsed);
-          } else {
-            // This is queue history data structure (Inbound/Outbound calls)
-            return queueHistoryToHtml(parsed);
-          }
-        }
+        return type === 'agent' ? historyToHtml(parsed) : queueHistoryToHtml(parsed);
       }
       return historyData; // Not an array, return as is
     } catch (e) {
@@ -2249,18 +2199,7 @@ function processHistoryData(historyData, type) {
   
   // If it's already an array
   if (Array.isArray(historyData)) {
-    if (type === 'agent') {
-      return historyToHtml(historyData);
-    } else {
-      // For queue history, check data structure
-      if (historyData.length > 0 && historyData[0].hasOwnProperty('last_attempt')) {
-        // This is agent history data structure (Campaign calls)
-        return historyToHtml(historyData);
-      } else {
-        // This is queue history data structure (Inbound/Outbound calls)
-        return queueHistoryToHtml(historyData);
-      }
-    }
+    return type === 'agent' ? historyToHtml(historyData) : queueHistoryToHtml(historyData);
   }
   
   return historyData;
