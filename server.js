@@ -21,6 +21,8 @@ import bcrypt from 'bcrypt';
 import mysql from 'mysql2/promise';
 import dbService, { checkDataExists, clearCache } from './dbService.js';
 import { DateTime } from 'luxon';
+import { generateBLAHotPatchTransferReport } from './blaHotPatchTransferService.js';
+
 // import finalReportService from './finalReportService.js';
 // import recordingsFetcher from './recordingsFetcher.js';
 
@@ -74,31 +76,35 @@ const __dirname = path.dirname(__filename);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Route for hot-patch page
+app.get('/hot-patch', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'hot-patch.html'));
+});
 // --- Authentication setup ---
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key';
 
 // Create MySQL connection pool
-const pool = mysql.createPool({
-  host:  'localhost',
-  user: 'root',
-  password: 'Ayan@1012',
-  database: 'meydan_main_cdr',
-  port: 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
-
 // const pool = mysql.createPool({
-//   host:"0.0.0.0",
-//   user: 'multycomm',
-//   password: 'WELcome@123',
+//   host:  'localhost',
+//   user: 'root',
+//   password: 'Ayan@1012',
 //   database: 'meydan_main_cdr',
 //   port: 3306,
 //   waitForConnections: true,
-//   connectionLimit: 20,
+//   connectionLimit: 10,
 //   queueLimit: 0
 // });
+
+const pool = mysql.createPool({
+  host:"0.0.0.0",
+  user: 'multycomm',
+  password: 'WELcome@123',
+  database: 'meydan_main_cdr',
+  port: 3306,
+  waitForConnections: true,
+  connectionLimit: 20,
+  queueLimit: 0
+});
 
 // Login
 app.post('/api/login', async (req, res) => {
@@ -1597,6 +1603,169 @@ app.get('/api/reports/search', async (req, res) => {
       error: errorMessage,
       request_id: requestId,
       ...(errorDetails && { details: errorDetails })
+    });
+  }
+});
+
+// BLA Hot Patch Transfer Report endpoint
+app.get('/api/reports/bla-hot-patch-transfer', async (req, res) => {
+  const requestId = Math.random().toString(36).substring(2, 10);
+  
+  try {
+    console.log(`🔥 BLA HOT PATCH: Starting transfer report generation (Request ID: ${requestId})`);
+    
+    // Extract query parameters
+    const {
+      start,
+      end,
+      agent_name,
+      extension,
+      queue_campaign_name,
+      sort_by = 'called_time',
+      sort_order = 'desc'
+    } = req.query;
+    
+    // Validate required parameters
+    if (!start || !end) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: start and end dates are required',
+        request_id: requestId
+      });
+    }
+    
+    console.log(`📅 BLA HOT PATCH: Date range: ${start} to ${end}`);
+    console.log(`🔍 BLA HOT PATCH: Filters - Agent: ${agent_name || 'All'}, Extension: ${extension || 'All'}, Queue/Campaign: ${queue_campaign_name || 'All'}`);
+    
+    // Generate the BLA Hot Patch Transfer report
+    const reportResult = await generateBLAHotPatchTransferReport(pool, {
+      start,
+      end,
+      agent_name,
+      extension,
+      queue_campaign_name
+    });
+    
+    if (!reportResult.success) {
+      console.error(`❌ BLA HOT PATCH ERROR: ${reportResult.error}`);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate BLA Hot Patch Transfer report',
+        error: reportResult.error,
+        request_id: requestId
+      });
+    }
+    
+    const { data, summary } = reportResult;
+    
+    // Apply sorting
+    const validSortColumns = [
+      'campaign_called_time', 'transfer_time', 'inbound_called_time', 
+      'campaign_agent_name', 'receiving_agent_name', 'campaign_customer_name',
+      'campaign_talk_duration', 'inbound_talk_duration', 'time_difference_seconds'
+    ];
+    
+    const sortColumn = validSortColumns.includes(sort_by) ? sort_by : 'campaign_called_time';
+    const sortDir = sort_order?.toLowerCase() === 'asc' ? 1 : -1;
+    
+    data.sort((a, b) => {
+      const aVal = a[sortColumn];
+      const bVal = b[sortColumn];
+      
+      if (aVal === bVal) return 0;
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
+      
+      if (typeof aVal === 'string') {
+        return aVal.localeCompare(bVal) * sortDir;
+      }
+      
+      return (aVal < bVal ? -1 : 1) * sortDir;
+    });
+    
+    console.log(`✅ BLA HOT PATCH SUCCESS: Generated report with ${data.length} linked transfer calls`);
+    console.log(`📊 BLA HOT PATCH SUMMARY:`, summary);
+    
+    // Return the report data
+    res.json({
+      success: true,
+      data: data,
+      summary: summary,
+      total: data.length,
+      request_id: requestId,
+      report_type: 'BLA_Hot_Patch_Transfer',
+      generated_at: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error(`❌ BLA HOT PATCH CRITICAL ERROR (Request ID: ${requestId}):`, error);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while generating BLA Hot Patch Transfer report',
+      error: error.message,
+      request_id: requestId
+    });
+  }
+});
+
+// BLA Hot Patch Transfer Report endpoint (POST for hot-patch page)
+app.post('/api/bla-hot-patch-transfer', async (req, res) => {
+  const requestId = Math.random().toString(36).substring(2, 10);
+  
+  try {
+    console.log(`🔥 BLA HOT PATCH POST: Starting transfer report generation (Request ID: ${requestId})`);
+    
+    // Extract body parameters
+    const { startEpoch, endEpoch } = req.body;
+    
+    // Validate required parameters
+    if (!startEpoch || !endEpoch) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: startEpoch and endEpoch are required',
+        request_id: requestId
+      });
+    }
+    
+    console.log(`🔥 BLA HOT PATCH POST: Time range - Start: ${startEpoch} (${new Date(startEpoch * 1000).toISOString()}), End: ${endEpoch} (${new Date(endEpoch * 1000).toISOString()})`);
+    
+    // Generate the report
+    const reportResult = await generateBLAHotPatchTransferReport(pool, {
+      start: new Date(startEpoch * 1000).toISOString(),
+      end: new Date(endEpoch * 1000).toISOString()
+    });
+    
+    if (!reportResult.success) {
+      console.error(`❌ BLA HOT PATCH POST ERROR: ${reportResult.error}`);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate BLA Hot Patch Transfer report',
+        error: reportResult.error,
+        request_id: requestId
+      });
+    }
+    
+    console.log(`✅ BLA HOT PATCH POST: Report generated successfully with ${reportResult.data?.length || 0} records`);
+    
+    // Return the report data
+    res.json({
+      success: true,
+      message: 'BLA Hot Patch Transfer report generated successfully',
+      data: reportResult.data,
+      summary: reportResult.summary,
+      request_id: requestId,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error(`❌ BLA HOT PATCH POST CRITICAL ERROR (Request ID: ${requestId}):`, error);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while generating BLA Hot Patch Transfer report',
+      error: error.message,
+      request_id: requestId
     });
   }
 });
