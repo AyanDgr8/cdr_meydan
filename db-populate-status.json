@@ -5,13 +5,13 @@
     "intervalMinutes": 5,
     "lookbackHours": 1
   },
-  "lastUpdated": "2026-01-27T10:59:54.590Z",
-  "lastRun": "2026-01-27T10:59:54.588Z",
-  "duration": "13.22s",
-  "recordsAdded": 858,
+  "lastUpdated": "2026-01-27T13:34:05.257Z",
+  "lastRun": "2026-01-27T13:34:05.254Z",
+  "duration": "15.97s",
+  "recordsAdded": 912,
   "followUpNotesUpdated": 0,
-  "dispositionUpdates": 116,
-  "nextRun": "2026-01-27T11:04:54.589Z",
+  "dispositionUpdates": 113,
+  "nextRun": "2026-01-27T13:39:05.255Z",
   "reason": "SIGINT received",
   "error": "Unknown database 'meydan_main_cdr'"
 }
