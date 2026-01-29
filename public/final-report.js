@@ -189,6 +189,7 @@ function getFormValues() {
     end: endDate,
     // caller_id_number: document.getElementById('caller_id_number').value,
     // callee_id_number: document.getElementById('callee_id_number').value,
+    call_id: document.getElementById('call_id').value,
     contact_number: document.getElementById('contact_number').value,
     agent_name: document.getElementById('agent_name').value,
     extension: document.getElementById('extension').value,
