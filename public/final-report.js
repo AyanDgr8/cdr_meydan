@@ -351,6 +351,7 @@ function createTableHeaders() {
     'Recording',
     'All Recordings',
     'Call ID',
+    'CSAT',
     'System Disposition',
   ];
   
@@ -511,6 +512,7 @@ function createTableRows(data) {
       row.recording ? createRecordingLink(row.recording) : '',
       (row.call_id && row.called_time) ? createAllRecordingsButton(row.call_id, row.called_time) : '',
       row.call_id || '',
+      row.CSAT || row.csat || '',
       row.system_disposition || row.disposition || '',
     ];
     
@@ -1295,6 +1297,7 @@ function appendTableRows(tbody, rows, startIndex = 0) {
       { value: row.recording ? createRecordingLink(row.recording) : '', isHTML: false, isElement: true },  // Recording button - plays single recording directly
       { value: (row.call_id && row.called_time) ? createAllRecordingsButton(row.call_id, row.called_time) : '', isHTML: false, isElement: true },  // All Recordings button - fetches all via API
       { value: row.call_id || '', isHTML: false },
+      { value: row.csat || '', isHTML: false },
       { value: row.system_disposition || row.disposition || '', isHTML: false },  // System Disposition column
     ];
     
@@ -2098,6 +2101,7 @@ function generateCSV() {
     'Queue History',
     'Recording',
     'Call ID',
+    'CSAT',
     'System Disposition'
   ];
   
@@ -2161,6 +2165,7 @@ function generateCSV() {
         `"${getHistoryTextForCSV(row, 'queue').replace(/"/g, '""')}"`,
         `"${(row.recording || '').replace(/"/g, '""')}"`,
         `"${(row.call_id || '').replace(/"/g, '""')}"`,
+        `"${(row.CSAT || row.csat || '').replace(/"/g, '""')}"`,
         `"${(row.system_disposition || row.disposition || '').replace(/"/g, '""')}"`,
       ].join(',');
       
